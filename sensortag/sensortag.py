@@ -41,7 +41,7 @@ class SensorTag:
         print "Preparing to connect. You might need to press the side button..."
         self.con.sendline('connect')
         # test for success of connect
-	self.con.expect('Connection successful.*\[LE\]>')
+    self.con.expect('Connection successful.*\[LE\]>')
         # Earlier versions of gatttool returned a different message.  Use this pattern -
         #self.con.expect('\[CON\].*>')
         self.cb = {}
@@ -58,6 +58,13 @@ class SensorTag:
         self.con.sendline( cmd )
         return
 
+    def char_write_req( self, handle, value ):
+        # The 0%x for value is VERY naughty!  Fix this!
+        cmd = 'char-write-req {0} {1}'.format(handle, value)
+        print cmd
+        self.con.sendline( cmd )
+        return
+
     def char_read_hnd( self, handle ):
         self.con.sendline('char-read-hnd 0x%02x' % handle)
         self.con.expect('descriptor: .*? \r')
@@ -68,19 +75,19 @@ class SensorTag:
     # Notification handle = 0x0025 value: 9b ff 54 07
     def notification_loop( self ):
         while True:
-	    try:
+        try:
               pnum = self.con.expect('Notification handle = .*? \r', timeout=4)
             except pexpect.TIMEOUT:
               print "TIMEOUT exception!"
               break
-	    if pnum==0:
+        if pnum==0:
                 after = self.con.after
-	        hxstr = after.split()[3:]
-            	handle = long(float.fromhex(hxstr[0]))
-            	#try:
-	        if True:
+            hxstr = after.split()[3:]
+                handle = long(float.fromhex(hxstr[0]))
+                #try:
+            if True:
                   self.cb[handle]([long(float.fromhex(n)) for n in hxstr[2:]])
-            	#except:
+                #except:
                 #  print "Error in callback for %x" % handle
                 #  print sys.argv[1]
                 pass
@@ -119,6 +126,8 @@ class SensorCallbacks:
         rawH = (v[3]<<8)+v[2]
         (t, rh) = calcHum(rawT, rawH)
         self.data['humd'] = [t, rh]
+        print time.time()
+        print "TEMP %.1f" % t
         print "HUMD %.1f" % rh
 
     def baro(self,v):
@@ -164,39 +173,11 @@ def main():
       tag = SensorTag(bluetooth_adr)
       cbs = SensorCallbacks(bluetooth_adr)
 
-      # enable TMP006 sensor
-      tag.register_cb(0x25,cbs.tmp006)
-      tag.char_write_cmd(0x29,0x01)
-      tag.char_write_cmd(0x26,0x0100)
-
-      # enable accelerometer
-      tag.register_cb(0x2d,cbs.accel)
-      tag.char_write_cmd(0x31,0x01)
-      tag.char_write_cmd(0x2e,0x0100)
-
-      # enable humidity
-      tag.register_cb(0x38, cbs.humidity)
-      tag.char_write_cmd(0x3c,0x01)
-      tag.char_write_cmd(0x39,0x0100)
-
-      # enable magnetometer
-      tag.register_cb(0x40,cbs.magnet)
-      tag.char_write_cmd(0x44,0x01)
-      tag.char_write_cmd(0x41,0x0100)
-
-      # enable gyroscope
-      tag.register_cb(0x57,cbs.gyro)
-      tag.char_write_cmd(0x5b,0x07)
-      tag.char_write_cmd(0x58,0x0100)
-
-      # fetch barometer calibration
-      tag.char_write_cmd(0x4f,0x02)
-      rawcal = tag.char_read_hnd(0x52)
-      barometer = Barometer( rawcal )
-      # enable barometer
-      tag.register_cb(0x4b,cbs.baro)
-      tag.char_write_cmd(0x4f,0x01)
-      tag.char_write_cmd(0x4c,0x0100)
+      tag.register_cb(0x29,cbs.humidity)
+      tag.char_write_cmd(0x2a,0x0100)
+      tag.char_write_cmd(0x2c,0x01)
+      # Poll as slow as possible
+      tag.char_write_req(0x2e,999)
 
       tag.notification_loop()
      except:
@@ -204,4 +185,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
